@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GDP vs. Life Expectancy: Narrative Visualization Project</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-annotation/2.5.1/d3-annotation.min.js"></script>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+        }
+
+        #visualization-container {
+            width: 900px;
+            margin: 0 auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+        }
+
+        h1 {
+            font-size: 24px;
+            text-align: center;
+        }
+
+        #narrative-text {
+            min-height: 80px;
+            padding: 10px;
+            text-align: left;
+        }
+
+        .axis path, .axis line {
+            fill: none;
+            stroke: #333;
+            shape-rendering: crispEdges;
+        }
+
+        .dot {
+            fill: #666;
+            opacity: 0.7;
+            cursor: pointer;
+        }
+
+        .dot:hover {
+            opacity: 1;
+            stroke: #000;
+            stroke-width: 1px;
+        }
+        
+        .china-path {
+            fill: none;
+            stroke: #e65100;
+            stroke-width: 2;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: #fff;
+            border: 1px solid #333;
+            padding: 5px;
+            pointer-events: none;
+        }
+
+        #navigation {
+            text-align: center;
+            margin-top: 10px;
+        }
+
+        button {
+            padding: 5px 10px;
+            margin: 0 5px;
+        }
+
+        button:disabled {
+            background-color: #eee;
+            cursor: not-allowed;
+        }
+
+        .annotation-group {
+            font-family: sans-serif;
+            font-size: 12px;
+        }
+        .annotation-note-title {
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="visualization-container">
+        <h1>GDP per Capita vs. Life Expectancy</h1>
+        <div id="narrative-text"></div>
+        <div id="chart-area">
+            <svg id="main-svg" width="800" height="600"></svg>
+        </div>
+        <div id="navigation">
+            <button id="prev-button" disabled>Previous</button>
+            <button id="next-button">Next</button>
+        </div>
+    </div>
+
+    <script>
+        let currentSceneIndex = 0;
+        const totalScenes = 3;
+
+        const mockData = [
+            { country: "USA", year: 2020, gdpPerCapita: 65000, lifeExpectancy: 78.5, continent: "North America" },
+            { country: "China", year: 2020, gdpPerCapita: 10500, lifeExpectancy: 77, continent: "Asia" },
+            { country: "Japan", year: 2020, gdpPerCapita: 40000, lifeExpectancy: 84.6, continent: "Asia" },
+            { country: "Switzerland", year: 2020, gdpPerCapita: 85000, lifeExpectancy: 83.8, continent: "Europe" },
+            { country: "Nigeria", year: 2020, gdpPerCapita: 2000, lifeExpectancy: 54, continent: "Africa" },
+            { country: "Cuba", year: 2020, gdpPerCapita: 9000, lifeExpectancy: 78.8, continent: "North America" }, // Outlier example
+            { country: "Central African Republic", year: 2020, gdpPerCapita: 500, lifeExpectancy: 53.3, continent: "Africa" },
+
+            { country: "China", year: 1960, gdpPerCapita: 100, lifeExpectancy: 36, continent: "Asia" },
+            { country: "China", year: 1970, gdpPerCapita: 200, lifeExpectancy: 62, continent: "Asia" },
+            { country: "China", year: 1980, gdpPerCapita: 300, lifeExpectancy: 67, continent: "Asia" },
+            { country: "China", year: 1990, gdpPerCapita: 1000, lifeExpectancy: 69, continent: "Asia" },
+            { country: "China", year: 2000, gdpPerCapita: 2000, lifeExpectancy: 72, continent: "Asia" },
+            { country: "China", year: 2010, gdpPerCapita: 7000, lifeExpectancy: 75, continent: "Asia" },
+            { country: "China", year: 2020, gdpPerCapita: 10500, lifeExpectancy: 77, continent: "Asia" },
+        ];
+
+        const svg = d3.select("#main-svg");
+        const margin = { top: 40, right: 40, bottom: 60, left: 80 };
+        const width = +svg.attr("width") - margin.left - margin.right;
+        const height = +svg.attr("height") - margin.top - margin.bottom;
+
+        const g = svg.append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        const tooltip = d3.select("body").append("div")
+            .attr("class", "tooltip")
+            .style("opacity", 0);
+
+        function drawScene1() {
+            const x = d3.scaleLog()
+                .domain([d3.min(mockData, d => d.gdpPerCapita) * 0.8, d3.max(mockData, d => d.gdpPerCapita) * 1.2])
+                .range([0, width]);
+            const y = d3.scaleLinear()
+                .domain([d3.min(mockData, d => d.lifeExpectancy) - 5, d3.max(mockData, d => d.lifeExpectancy) + 5])
+                .range([height, 0]);
+
+            g.append("g").attr("class", "x axis").attr("transform", `translate(0,${height})`).call(d3.axisBottom(x).ticks(5).tickFormat(d3.format(".2s")));
+            g.append("g").attr("class", "y axis").call(d3.axisLeft(y));
+
+            g.append("text").attr("transform", `translate(${width / 2},${height + margin.bottom - 10})`).attr("text-anchor", "middle").text("GDP per Capita (Log Scale)");
+            g.append("text").attr("transform", "rotate(-90)").attr("y", -margin.left + 20).attr("x", -height / 2).attr("text-anchor", "middle").text("Life Expectancy");
+
+            const data2020 = mockData.filter(d => d.year === 2020);
+            g.selectAll(".dot")
+                .data(data2020)
+                .enter().append("circle")
+                .attr("class", "dot")
+                .attr("cx", d => x(d.gdpPerCapita))
+                .attr("cy", d => y(d.lifeExpectancy))
+                .attr("r", 5)
+                .on("mouseover", (event, d) => {
+                    tooltip.style("opacity", 1).html(`<b>${d.country}</b><br>GDP: ${d3.format("$.2s")(d.gdpPerCapita)}<br>Life Exp: ${d.lifeExpectancy} years`).style("left", (event.pageX + 15) + "px").style("top", (event.pageY - 28) + "px");
+                })
+                .on("mouseout", () => {
+                    tooltip.style("opacity", 0);
+                });
+
+            const annotations = [{
+                note: {
+                    label: "(Hover over the data points for details)",
+                    title: "Wealthier countries have longer life expectancies",
+                    wrap: 150
+                },
+                x: x(18000),
+                y: y(92),
+               
+                type: d3.annotationLabel,
+                
+            }];
+            const makeAnnotations = d3.annotation().annotations(annotations);
+            g.append("g").attr("class", "annotation-group").call(makeAnnotations);
+
+            d3.select("#narrative-text").html("<p>Relationship between a country's GDP per capita and life expectancy for 2020</p>");
+        }
+
+        function drawScene2() {
+            const x = d3.scaleLog()
+                .domain([d3.min(mockData, d => d.gdpPerCapita) * 0.8, d3.max(mockData, d => d.gdpPerCapita) * 1.2])
+                .range([0, width]);
+            const y = d3.scaleLinear()
+                .domain([d3.min(mockData, d => d.lifeExpectancy) - 5, d3.max(mockData, d => d.lifeExpectancy) + 5])
+                .range([height, 0]);
+
+            g.append("g").attr("class", "x axis").attr("transform", `translate(0,${height})`).call(d3.axisBottom(x).ticks(5).tickFormat(d3.format(".2s")));
+            g.append("g").attr("class", "y axis").call(d3.axisLeft(y));
+            
+            g.append("text").attr("transform", `translate(${width / 2},${height + margin.bottom - 10})`).attr("text-anchor", "middle").text("GDP per Capita (Log Scale)");
+            g.append("text").attr("transform", "rotate(-90)").attr("y", -margin.left + 20).attr("x", -height / 2).attr("text-anchor", "middle").text("Life Expectancy");
+
+            const chinaData = mockData.filter(d => d.country === "China").sort((a,b) => a.year - b.year);
+
+            const line = d3.line().x(d => x(d.gdpPerCapita)).y(d => y(d.lifeExpectancy));
+            g.append("path").datum(chinaData).attr("class", "china-path").attr("d", line);
+
+            g.selectAll(".dot")
+                .data(chinaData)
+                .enter().append("circle")
+                .attr("class", "dot")
+                .attr("cx", d => x(d.gdpPerCapita))
+                .attr("cy", d => y(d.lifeExpectancy))
+                .attr("r", 5)
+                .on("mouseover", (event, d) => {
+                    tooltip.style("opacity", 1).html(`<b>${d.country}</b><br>Year: ${d.year}<br>GDP: ${d3.format("$.2s")(d.gdpPerCapita)}<br>Life Exp: ${d.lifeExpectancy} years`).style("left", (event.pageX + 15) + "px").style("top", (event.pageY - 28) + "px");
+                })
+                .on("mouseout", () => {
+                    tooltip.style("opacity", 0);
+                });
+
+            const annotations = [{
+                note: {
+                    label: "(Hover over the data points for details)",
+                    title: "1960: Life expectancy drops sharply",
+                    wrap: 150
+                },
+                x: x(100),
+                y: y(36),
+                dx: 100,
+                dy: -20,
+                type: d3.annotationCalloutCircle,
+                subject: {
+                    radius: 10
+                }
+            }, {
+                note: {
+                    label: "(Hover over the data points for details)",
+                    title: "Post-1980's Reforms",
+                    wrap: 150
+                },
+                x: x(7000),
+                y: y(75),
+                dx: 80,
+                dy: -100,
+                type: d3.annotationCalloutCircle,
+                subject: {
+                    radius: 10
+                }
+            }];
+            const makeAnnotations = d3.annotation().annotations(annotations);
+            g.append("g").attr("class", "annotation-group").call(makeAnnotations);
+
+            d3.select("#narrative-text").html("<p>China's journey from 1960 to 2020.</p>");
+        }
+
+        function drawScene3() {
+            const x = d3.scaleLog()
+                .domain([d3.min(mockData, d => d.gdpPerCapita) * 0.8, d3.max(mockData, d => d.gdpPerCapita) * 1.2])
+                .range([0, width]);
+            const y = d3.scaleLinear()
+                .domain([d3.min(mockData, d => d.lifeExpectancy) - 5, d3.max(mockData, d => d.lifeExpectancy) + 5])
+                .range([height, 0]);
+
+            g.append("g").attr("class", "x axis").attr("transform", `translate(0,${height})`).call(d3.axisBottom(x).ticks(5).tickFormat(d3.format(".2s")));
+            g.append("g").attr("class", "y axis").call(d3.axisLeft(y));
+            
+            g.append("text").attr("transform", `translate(${width / 2},${height + margin.bottom - 10})`).attr("text-anchor", "middle").text("GDP per Capita (Log Scale)");
+            g.append("text").attr("transform", "rotate(-90)").attr("y", -margin.left + 20).attr("x", -height / 2).attr("text-anchor", "middle").text("Life Expectancy");
+
+            const data2020 = mockData.filter(d => d.year === 2020);
+            g.selectAll(".dot")
+                .data(data2020)
+                .enter().append("circle")
+                .attr("class", "dot")
+                .attr("cx", d => x(d.gdpPerCapita))
+                .attr("cy", d => y(d.lifeExpectancy))
+                .attr("r", 5)
+                .attr("fill", d => d.country === "Cuba" ? "red" : "#666")
+                .on("mouseover", (event, d) => {
+                    tooltip.style("opacity", 1).html(`<b>${d.country}</b><br>GDP: ${d3.format("$.2s")(d.gdpPerCapita)}<br>Life Exp: ${d.lifeExpectancy} years`).style("left", (event.pageX + 15) + "px").style("top", (event.pageY - 28) + "px");
+                })
+                .on("mouseout", () => {
+                    tooltip.style("opacity", 0);
+                });
+
+            const annotations = [{
+                note: {
+                    label: "(Hover over the data points for details)",
+                    title: "Cuba is an outlier",
+                    wrap: 150
+                },
+                x: x(9000),
+                y: y(78.8),
+                dx: 80,
+                dy: -80,
+                type: d3.annotationLabel,
+                subject: {
+                    radius: 10,
+                    radiusPadding: 5
+                }
+            }];
+            const makeAnnotations = d3.annotation().annotations(annotations);
+            g.append("g").attr("class", "annotation-group").call(makeAnnotations);
+
+            d3.select("#narrative-text").html("<p>Correlation is not absolute as Cuba, achieves a high life expectancy despite a lower GDP.</p>");
+        }
+
+        function updateScene(sceneIndex) {
+            g.selectAll("*").remove();
+
+            d3.select("#prev-button").property("disabled", sceneIndex === 0);
+            d3.select("#next-button").property("disabled", sceneIndex === totalScenes - 1);
+
+            switch (sceneIndex) {
+                case 0: drawScene1(); break;
+                case 1: drawScene2(); break;
+                case 2: drawScene3(); break;
+            }
+        }
+
+        d3.select("#next-button").on("click", () => {
+            currentSceneIndex = Math.min(currentSceneIndex + 1, totalScenes - 1);
+            updateScene(currentSceneIndex);
+        });
+
+        d3.select("#prev-button").on("click", () => {
+            currentSceneIndex = Math.max(currentSceneIndex - 1, 0);
+            updateScene(currentSceneIndex);
+        });
+
+        updateScene(currentSceneIndex);
+    </script>
+</body>
+</html>
